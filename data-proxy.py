@@ -31,19 +31,22 @@ def parse_args():
     return host, int(port)
 
   return options, parse_address(args[0])
+
   
 
 class DataProxyProtocol(Protocol):
 
   def connectionMade(self):
     print 'Connection made with proxy server.'
-    d = self.factory.service.get_data()
-    d.addCallback(self.transport.write)
-    d.addBoth(lambda r: self.transport.loseConnection())
 
   def dataReceived(self, data):
     # this where historical data should be fired
     print 'The proxy server has received some data: ' + data
+    d = self.factory.service.get_data()
+    d.addCallback(self.transport.write) # writes the received data to the client
+    d.addBoth(lambda r: self.transport.loseConnection())
+
+
  
 class DataProxyFactory(ServerFactory):
   
@@ -53,24 +56,32 @@ class DataProxyFactory(ServerFactory):
     self.service = service
 
 
+
 class DataClientProtocol(Protocol):
-    #historical_data = ''
-  
+ 
+  def connectionMade(self):
+    # test sending some data to server
+    self.send_request('test msg from proxy client')
+
   def dataReceived(self,data):
-    #self.historical_data += data
     self.factory.data_received(data)
   
   def connectionLost(self, reason):
     print 'Data Proxy Client has lost connection.'
+
+  def send_request(self,request):
+    self.transport.write(request)
 
 class DataClientFactory(ClientFactory):
 
   protocol = DataClientProtocol
 
   def __init__(self):
+    # deferred created, notice deferred is created and fired in same class
     self.deferred = Deferred()
 
   def data_received(self, data):
+    # pattern to fire deferred
     if self.deferred is not None:
       d, self.deferred = self.deferred, None
       d.callback(data)
@@ -79,6 +90,8 @@ class DataClientFactory(ClientFactory):
     if self.derred is not None:
       d, self.deferred = self.deferred, None
       d.errback(reason)
+
+
 
 class ProxyService(object):
 
@@ -89,12 +102,14 @@ class ProxyService(object):
     self.port = port
 
   def get_data(self):
-    print 'Fetching data from server.'
+    # creates an instance of the client via the factory, connects the client to the server, returns a deferred
+    print 'Connecting a proxy client to data-request-server on %s:%s.' % (self.host, self.port)
     factory = DataClientFactory()
-    #factory.deferred.addCallback(self.set_data) 
+    #factory.deferred.addCallback(factory.protocol.transport.write) 
     from twisted.internet import reactor
     reactor.connectTCP(self.host, self.port, factory)
     return factory.deferred
+
 
 
 def main():

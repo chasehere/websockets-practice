@@ -30,7 +30,7 @@ class DataRequestProtocol(Protocol):
  
   def dataReceived(self, data):
     ''' This shows the request for a second user is not completed until the first request has been fulfilled.  The server blocks on the reactor. '''
-    print 'Request for data received.'
+    print 'Request for data received: %s' % data
     start = time.time()
     output = self.factory.service.getData()
     end = time.time() - start
